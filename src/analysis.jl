@@ -107,20 +107,20 @@ produce the same lowered code.
 function compare_expr(lhs, rhs)
     @switch (lhs, rhs) begin
         @case (::Symbol, ::Symbol)
-            lhs === rhs
+        lhs === rhs
         @case (Expr(:curly, name, lhs_vars...), Expr(:curly, &name, rhs_vars...))
-            all(map(compare_vars, lhs_vars, rhs_vars))
+        all(map(compare_vars, lhs_vars, rhs_vars))
         @case (Expr(:where, lbody, lparams...), Expr(:where, rbody, rparams...))
-            compare_expr(lbody, rbody) &&
-                all(map(compare_vars, lparams, rparams))
+        compare_expr(lbody, rbody) &&
+            all(map(compare_vars, lparams, rparams))
         @case (Expr(head, largs...), Expr(&head, rargs...))
-                isempty(largs) && isempty(rargs) ||
+        isempty(largs) && isempty(rargs) ||
             (length(largs) == length(rargs) && all(map(compare_expr, largs, rargs)))
         # ignore LineNumberNode
         @case (::LineNumberNode, ::LineNumberNode)
-            true
+        true
         @case _
-            lhs == rhs
+        lhs == rhs
     end
 end
 
@@ -134,14 +134,14 @@ this assumption. See also [`compare_expr`](@ref).
 function compare_vars(lhs, rhs)
     @switch (lhs, rhs) begin
         @case (::Symbol, ::Symbol)
-            true
+        true
         @case (Expr(head, largs...), Expr(&head, rargs...))
-            all(map(compare_vars, largs, rargs))
+        all(map(compare_vars, largs, rargs))
         # ignore LineNumberNode
         @case (::LineNumberNode, ::LineNumberNode)
-            true
+        true
         @case _
-            lhs == rhs
+        lhs == rhs
     end
 end
 
@@ -192,7 +192,7 @@ support_default(f::JLKwField) = true
 function has_symbol(@nospecialize(ex), name::Symbol)
     ex isa Symbol && return ex === name
     ex isa Expr || return false
-    return any(x->has_symbol(x, name), ex.args)
+    return any(x -> has_symbol(x, name), ex.args)
 end
 
 """
@@ -203,7 +203,7 @@ The constructor name to check by default is the plain constructor which does
 not infer any type variables and requires user to input all type variables.
 See also [`struct_name_plain`](@ref).
 """
-function has_kwfn_constructor(def, name = struct_name_plain(def))
+function has_kwfn_constructor(def, name=struct_name_plain(def))
     any(def.constructors) do fn::JLFunction
         isempty(fn.args) && fn.name == name
     end
@@ -250,7 +250,7 @@ end
 has_plain_constructor(def) # false
 ```
 """
-function has_plain_constructor(def, name = struct_name_plain(def))
+function has_plain_constructor(def, name=struct_name_plain(def))
     any(def.constructors) do fn::JLFunction
         fn.name == name || return false
         fn.kwargs === nothing || return false
@@ -371,6 +371,34 @@ function is_field_default(@nospecialize(ex))
         _ => false
     end
 end
+
+
+"""
+    is_tuple(ex)
+
+Check if `ex` is a tuple expression, i.e. `:((a,b,c))`
+"""
+is_tuple(x) = Meta.isexpr(x, :tuple)
+
+"""
+    is_splat(ex)
+
+Check if `ex` is a splat expression, i.e. `:(f(x)...)`
+"""
+is_splat(x) = Meta.isexpr(x, :(...))
+
+"""
+    is_annot(ex)
+    is_annot(ex, t)
+
+Check if `ex` is a type annotation expression. 
+If `t` is given, check if `ex` is a type annotation expression with type `t`, i.e. `ex::t`
+"""
+is_annot(ex) = Meta.isexpr(ex, :(::))
+is_annot(ex, t) = is_annot(ex) && x.args[2] == t
+is_annot(ex::JLField) = ex.type != Any
+is_annot(ex::JLField, t) = ex.type == t
+
 
 """
     is_datatype_expr(ex)
@@ -514,13 +542,13 @@ function split_single_for_head(ex::Expr)
     return ex.args[1], ex.args[2]
 end
 
-function uninferrable_typevars(def::Union{JLStruct, JLKwStruct}; leading_inferable::Bool=true)
+function uninferrable_typevars(def::Union{JLStruct,JLKwStruct}; leading_inferable::Bool=true)
     typevars = name_only.(def.typevars)
     field_types = [field.type for field in def.fields]
 
     if leading_inferable
         idx = findfirst(typevars) do t
-            !any(map(f->has_symbol(f, t), field_types))
+            !any(map(f -> has_symbol(f, t), field_types))
         end
         idx === nothing && return []
     else
@@ -529,7 +557,7 @@ function uninferrable_typevars(def::Union{JLStruct, JLKwStruct}; leading_inferab
     uninferrable = typevars[1:idx]
 
     for T in typevars[idx+1:end]
-        any(map(f->has_symbol(f, T), field_types)) || push!(uninferrable, T)
+        any(map(f -> has_symbol(f, T), field_types)) || push!(uninferrable, T)
     end
     return uninferrable
 end
@@ -585,21 +613,21 @@ function JLStruct(ex::Expr)
     for each in body.args
         @switch each begin
             @case :($name::$type)
-                push!(fields, JLField(name, type, field_doc, field_line))
+            push!(fields, JLField(name, type, field_doc, field_line))
             @case name::Symbol
-                push!(fields, JLField(name, Any, field_doc, field_line))
+            push!(fields, JLField(name, Any, field_doc, field_line))
             @case ::String
-                field_doc = each
+            field_doc = each
             @case ::LineNumberNode
-                field_line = each
+            field_line = each
             @case GuardBy(is_function)
-                if name_only(each) === typename
-                    push!(constructors, JLFunction(each))
-                else
-                    push!(misc, each)
-                end
-            @case _
+            if name_only(each) === typename
+                push!(constructors, JLFunction(each))
+            else
                 push!(misc, each)
+            end
+            @case _
+            push!(misc, each)
         end
     end
     JLStruct(typename, ismutable, typevars, supertype, fields, constructors, line, doc, misc)
@@ -633,25 +661,25 @@ function JLKwStruct(ex::Expr, typealias=nothing)
     for each in body.args
         @switch each begin
             @case :($name::$type = $default)
-                push!(fields, JLKwField(name, type, field_doc, field_line, default))
+            push!(fields, JLKwField(name, type, field_doc, field_line, default))
             @case :($(name::Symbol) = $default)
-                push!(fields, JLKwField(name, Any, field_doc, field_line, default))
+            push!(fields, JLKwField(name, Any, field_doc, field_line, default))
             @case name::Symbol
-                push!(fields, JLKwField(name, Any, field_doc, field_line, no_default))
+            push!(fields, JLKwField(name, Any, field_doc, field_line, no_default))
             @case :($name::$type)
-                push!(fields, JLKwField(name, type, field_doc, field_line, no_default))
+            push!(fields, JLKwField(name, type, field_doc, field_line, no_default))
             @case ::String
-                field_doc = each
+            field_doc = each
             @case ::LineNumberNode
-                field_line = each
+            field_line = each
             @case GuardBy(is_function)
-                if name_only(each) === typename
-                    push!(constructors, JLFunction(each))
-                else
-                    push!(misc, each)
-                end
-            @case _
+            if name_only(each) === typename
+                push!(constructors, JLFunction(each))
+            else
                 push!(misc, each)
+            end
+            @case _
+            push!(misc, each)
         end
     end
     JLKwStruct(typename, typealias, ismutable, typevars, supertype, fields, constructors, line, doc, misc)

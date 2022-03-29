@@ -14,7 +14,7 @@ function eval_interp(m::Module, ex)
             return ex
         end
     end
-    return Expr(ex.head, map(x->eval_interp(m, x), ex.args)...)
+    return Expr(ex.head, map(x -> eval_interp(m, x), ex.args)...)
 end
 
 """
@@ -28,14 +28,14 @@ function eval_literal(m::Module, ex)
     if ex.head === :call && all(is_literal, ex.args[2:end])
         return Base.eval(m, ex)
     end
-    return Expr(ex.head, map(x->eval_literal(m, x), ex.args)...)
+    return Expr(ex.head, map(x -> eval_literal(m, x), ex.args)...)
 end
 
 replace_symbol(x::Symbol, name::Symbol, value) = x === name ? value : x
 replace_symbol(x, ::Symbol, value) = x # other expressions
 
 function replace_symbol(ex::Expr, name::Symbol, value)
-    Expr(ex.head, map(x->replace_symbol(x, name, value), ex.args)...)
+    Expr(ex.head, map(x -> replace_symbol(x, name, value), ex.args)...)
 end
 
 """
@@ -52,7 +52,7 @@ end
     name_only(ex)
 
 Remove everything else leaving just names, currently supports
-function calls, type with type variables, subtype operator `<:`
+function calls, type with type variables, subtype operator `<:`, `JLField`
 and type annotation `::`.
 
 # Example
@@ -76,6 +76,7 @@ julia> name_only(:(x::Int))
 function name_only(@nospecialize(ex))
     ex isa Symbol && return ex
     ex isa QuoteNode && return ex.value
+    ex isa JLField && return ex.name
     ex isa Expr || error("unsupported expression $ex")
     ex.head in [:call, :curly, :(<:), :(::), :where, :function, :kw, :(=), :(->)] && return name_only(ex.args[1])
     ex.head === :. && return name_only(ex.args[2])
@@ -97,7 +98,7 @@ Remove `LineNumberNode` in a given expression.
 function rm_lineinfo(ex)
     @match ex begin
         Expr(:macrocall, name, line, args...) => Expr(:macrocall, name, line, map(rm_lineinfo, args)...)
-        Expr(head, args...) => Expr(head, map(rm_lineinfo, filter(x->!(x isa LineNumberNode), args))...)
+        Expr(head, args...) => Expr(head, map(rm_lineinfo, filter(x -> !(x isa LineNumberNode), args))...)
         _ => ex
     end
 end
@@ -133,7 +134,7 @@ All the options are `true` by default.
     [issues/#9](https://github.com/Roger-luo/Expronicon.jl/issues/9).
 """
 function prettify(ex; kw...)
-    prettify(ex, PrettifyOptions(;kw...))
+    prettify(ex, PrettifyOptions(; kw...))
 end
 
 function prettify(ex, options::PrettifyOptions)
@@ -197,7 +198,7 @@ Remove the constant value `nothing` in given expression `ex`.
 """
 function rm_nothing(ex)
     @match ex begin
-        Expr(:block, args...) => Expr(:block, filter(x->x!==nothing, args)...)
+        Expr(:block, args...) => Expr(:block, filter(x -> x !== nothing, args)...)
         Expr(head, args...) => Expr(head, map(rm_nothing, args)...)
         _ => ex
     end
@@ -210,22 +211,22 @@ function rm_single_block(ex)
             Expr(:quote, xs...) ||
             Expr(:block, Expr(:quote, xs...)) => ex
         Expr(:try, Expr(:block, try_stmts...), false, false, Expr(:block, finally_stmts...)) => Expr(:try,
-                Expr(:block, rm_single_block.(try_stmts)...),
-                false, false,
-                Expr(:block, rm_single_block.(finally_stmts)...)
-            )
+            Expr(:block, rm_single_block.(try_stmts)...),
+            false, false,
+            Expr(:block, rm_single_block.(finally_stmts)...)
+        )
         Expr(:try, Expr(:block, try_stmts...), catch_var, Expr(:block, catch_stmts...)) => Expr(:try,
-                Expr(:block, rm_single_block.(try_stmts)...),
-                catch_var,
-                Expr(:block, rm_single_block.(catch_stmts)...)
-            )
+            Expr(:block, rm_single_block.(try_stmts)...),
+            catch_var,
+            Expr(:block, rm_single_block.(catch_stmts)...)
+        )
         Expr(:try, Expr(:block, try_stmts...), catch_var,
             Expr(:block, catch_stmts...), Expr(:block, finally_stmts...)) => Expr(:try,
-                Expr(:block, rm_single_block.(try_stmts)...),
-                catch_var,
-                Expr(:block, rm_single_block.(catch_stmts)...),
-                Expr(:block, rm_single_block.(finally_stmts)...)
-            )
+            Expr(:block, rm_single_block.(try_stmts)...),
+            catch_var,
+            Expr(:block, rm_single_block.(catch_stmts)...),
+            Expr(:block, rm_single_block.(finally_stmts)...)
+        )
         Expr(:block, stmt) => stmt
         Expr(head, args...) => Expr(head, map(rm_single_block, args)...)
         _ => ex
@@ -252,6 +253,8 @@ function rm_annotations(x)
     end
 end
 
+rm_annotations(x::JLField) = JLField(x.name, Any, x.doc, x.line)
+
 """
     alias_gensym(ex)
 
@@ -260,9 +263,9 @@ Replace gensym with `<name>_<id>`.
 !!! note
     Borrowed from [MacroTools](https://github.com/FluxML/MacroTools.jl).
 """
-alias_gensym(ex) = alias_gensym!(Dict{Symbol, Symbol}(), Dict{Symbol, Int}(), ex)
+alias_gensym(ex) = alias_gensym!(Dict{Symbol,Symbol}(), Dict{Symbol,Int}(), ex)
 
-function alias_gensym!(d::Dict{Symbol, Symbol}, count::Dict{Symbol, Int}, ex)
+function alias_gensym!(d::Dict{Symbol,Symbol}, count::Dict{Symbol,Int}, ex)
     if is_gensym(ex)
         haskey(d, ex) && return d[ex]
         name = Symbol(gensym_name(ex))

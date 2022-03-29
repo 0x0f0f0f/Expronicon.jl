@@ -63,7 +63,7 @@ end
 function codegen_ast(fn::JLFunction)
     # handle anonymous syntax: function (x; kw=value) end
     if fn.head === :function && fn.name === nothing && fn.kwargs !== nothing &&
-        isone(length(fn.args)) && isone(length(fn.kwargs))
+       isone(length(fn.args)) && isone(length(fn.kwargs))
         kw = fn.kwargs[1].args[1]
         va = fn.kwargs[1].args[2]
         call = Expr(:block, fn.args[1], :($kw = $va))
@@ -93,7 +93,7 @@ function codegen_ast(fn::JLFunction)
 end
 
 function codegen_ast(def::JLStruct)
-    return codegen_ast_struct(def)    
+    return codegen_ast_struct(def)
 end
 
 function codegen_ast(def::JLKwStruct)
@@ -151,7 +151,7 @@ quote
 end
 ```
 """
-function codegen_ast_kwfn(def, name = nothing)
+function codegen_ast_kwfn(def, name=nothing)
     quote
         $(codegen_ast_kwfn_plain(def, name))
         $(codegen_ast_kwfn_infer(def, name))
@@ -164,7 +164,7 @@ end
 Generate the plain keyword function that does not infer type variables.
 So that one can use the type conversions defined by constructors.
 """
-function codegen_ast_kwfn_plain(def, name = nothing)
+function codegen_ast_kwfn_plain(def, name=nothing)
     isempty(def.fields) && return
     struct_name = struct_name_plain(def)
 
@@ -174,7 +174,7 @@ function codegen_ast_kwfn_plain(def, name = nothing)
         whereparams = isempty(def.typevars) ? nothing : name_only.(def.typevars)
     else
         @gensym T
-        args = [:(::Type{$T}), ]
+        args = [:(::Type{$T}),]
         whereparams = [name_only.(def.typevars)..., :($T <: $struct_name)]
     end
 
@@ -182,15 +182,15 @@ function codegen_ast_kwfn_plain(def, name = nothing)
     has_kwfn_constructor(def, name) && return
 
     kwfn_def = JLFunction(;
-        name = name,
-        args = args,
+        name=name,
+        args=args,
         # NOTE:
         # do not use type annotations so that
         # we can use type conversion defined
         # by the constructors.
-        kwargs = codegen_ast_fields(def.fields; just_name=true),
-        whereparams = whereparams,
-        body = Expr(:call, struct_name, [field.name for field in def.fields]...)
+        kwargs=codegen_ast_fields(def.fields; just_name=true),
+        whereparams=whereparams,
+        body=Expr(:call, struct_name, [field.name for field in def.fields]...)
     )
 
     return codegen_ast(kwfn_def)
@@ -201,7 +201,7 @@ end
 
 Generate the keyword function that infers the type.
 """
-function codegen_ast_kwfn_infer(def, name = nothing)
+function codegen_ast_kwfn_infer(def, name=nothing)
     # no typevars to infer, use the plain one
     isempty(def.typevars) && return
     struct_name = struct_name_without_inferable(def)
@@ -216,7 +216,7 @@ function codegen_ast_kwfn_infer(def, name = nothing)
     else
         @gensym T
         ub = isempty(requires) ? def.name : Expr(:curly, def.name, requires...)
-        args = [:(::Type{$T}), ]
+        args = [:(::Type{$T}),]
         whereparams = [requires..., :($T <: $ub)]
     end
 
@@ -224,13 +224,13 @@ function codegen_ast_kwfn_infer(def, name = nothing)
     has_kwfn_constructor(def, name) && return
 
     kwfn_def = JLFunction(;
-        name = name,
-        args = args,
+        name=name,
+        args=args,
         # NOTE:
         # enable type annotations to infer typevars
-        kwargs = codegen_ast_fields(def.fields; just_name=true),
-        whereparams = whereparams,
-        body = Expr(:call, struct_name,
+        kwargs=codegen_ast_fields(def.fields; just_name=true),
+        whereparams=whereparams,
+        body=Expr(:call, struct_name,
             [field.name for field in def.fields]...)
     )
     return codegen_ast(kwfn_def)
@@ -437,7 +437,7 @@ function codegen_ast_struct(def)
     return codegen_ast_docstring(def, ex)
 end
 
-function codegen_ast(def::Union{JLField, JLKwField})
+function codegen_ast(def::Union{JLField,JLKwField})
     return if def.type === Any
         def.name
     else
@@ -459,7 +459,7 @@ xtuple(xs...) = Expr(:tuple, xs...)
 
 Create a `NamedTuple` expression.
 """
-function xnamedtuple(;kw...)
+function xnamedtuple(; kw...)
     ex = Expr(:tuple)
     for (k, v) in kw
         push!(ex.args, :($k = $v))
@@ -496,6 +496,27 @@ function xcall(m::Module, name::Symbol, args...; kw...)
     # NOTE: not use GlobalRef due to Revise#616
     xcall(Expr(:., m, QuoteNode(name)), args...; kw...)
 end
+
+"""
+    xblock(x)
+
+Create a block expression around `x`.
+"""
+xblock(x) = Expr(:block, x)
+
+"""
+    xsplat(x)
+
+Create a splatting expression around `x`, i.e. `x...`.
+"""
+xsplat(x) = Expr(:(...), x)
+
+"""
+    xannot(x, t)
+
+Create a type annotation expression around `x` for type `t`, i.e. `x::t`.
+"""
+xannot(x, y) = Expr(:(::), x, y)
 
 """
     xgetindex(collection, key...)
